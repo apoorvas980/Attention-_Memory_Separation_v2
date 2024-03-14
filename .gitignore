@@ -1,0 +1,8 @@
+cache.json
+foo.*
+octave-workspace
+*.log
+data/test_*.json*
+.Rproj.user
+*.Rhistory
+*.png
