@@ -5,6 +5,7 @@ classdef StateMachine < handle
         too_slow = 0
         press_time = 0
         failed_this_trial = 0
+        aud % audio handle
     end % public properties
 
     properties (Access = private)
@@ -14,7 +15,6 @@ classdef StateMachine < handle
         tgt % trial table
         un % unit handler
         kb % keyboard index
-        aud % audio handle
         beeps % map of beeps
         trial_summary_data % per-trial data summary (e.g. RT, any collisions, ...)
         trial_count = 1 % helps keep track of when to quit task
@@ -53,7 +53,7 @@ classdef StateMachine < handle
             sampling_rate = 48000;
 
             sm.aud = PsychPortAudio('Open',
-                                    [5], % default device
+                                    [], % default device
                                     1 + 8, % playback only, master device
                                     2, % full control
                                     sampling_rate, % sampling rate
@@ -173,6 +173,7 @@ classdef StateMachine < handle
                 else
                     hold_time = 1;
                     t_pred = PredictVisualOnsetForTime(w.w, est_next_vbl + hold_time);
+                    % TODO: make sure device is idle (not playing?) before this!
                     PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
                 end
             end % RETURN_TO_CENTER
@@ -186,7 +187,10 @@ classdef StateMachine < handle
                 % Movement trial logic
                 % Implement logic for Movement trials
                 % Example: Check for collisions, movement speed, etc.
-                if (distance(sm.center.x, sm.center.y, sm.cursor.x, sm.cursor.y) > distance(sm.center.x, sm.center.y, sm.target.x, sm.target.y)) 
+                d1 = distance(sm.center.x, sm.cursor.x, sm.center.y, sm.cursor.y);
+                d2 = distance(sm.center.x, sm.target.x, sm.center.y, sm.target.y);
+                % disp(sprintf('d1: %.4f, d2: %.4f ', d1, d2));
+                if (d1 > d2) 
                     sm.state = states.REACH_GOOD;
                     sm.cursor.vis = false;
                 end
@@ -200,7 +204,7 @@ classdef StateMachine < handle
                     error('Unknown attention type!');
                 end
 
-                target_angle = atan2d(sm.target.y - sm.center.y, sm.target.x - sm.center.x);
+                %target_angle = atan2d(sm.target.y - sm.center.y, sm.target.x - sm.center.x);
                 d = distance(sm.cursor.x, sm.center.x, sm.cursor.y, sm.center.y);
                 sm.cursor.x = d * cosd(angs(1)) + sm.center.x;
                 sm.cursor.y = d * sind(angs(2)) + sm.center.y;

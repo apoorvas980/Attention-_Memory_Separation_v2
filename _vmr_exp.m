@@ -1,8 +1,64 @@
 % the "real" part of the experiment
+%{
+Eyetracking components from
+https://github.com/kleinerm/Psychtoolbox-3/blob/eyelinktoolboxrc/Psychtoolbox/PsychHardware/EyelinkToolbox/EyelinkDemos/SR-ResearchDemos/GazeContingent/FixWindowBufferedSamples/EyeLink_FixWindowBufferedSamples.m
+
+The idea behind using the buffered samples is that we would get saccade events from the system, rather than on-the-fly computation with the lastest sample
+Decided to use buffered version because the display (and therefore event loop rate) is ~60Hz, which is close to too low for saccades, and way too low for 
+microsaccades?
+
+%}
+
 function _vmr_exp(is_debug, is_short, group, block_type, settings)
     % profile on;
+    
     start_unix = floor(time());
     start_dt = datestr(clock(), 31); %Y-M-D H:M:S
+    % beats me why we do this? it's in the eyetracking example
+    if ~IsOctave; commandwindow; end
+
+    dummy_mode = 0;
+    EyelinkInit(dummy_mode);
+    if Eyelink('IsConnected') < 1
+        dummy_mode = 1;
+    end
+
+    % note that the usual participant ID (msl***) is far too long, so we just take the last 5 numbers and hope for the best
+    id = settings.id;
+    slice = min(length(id) - 1, 5);
+    edf_filename = strcat(settings.id(end-slice:end), '_', num2str(start_unix)); % TODO: need to include EDF extension?
+    edf_filename = edf_filename(1:8); % because we're in the stone ages and can't have a longer filename than 8 chars
+    failed = Eyelink('OpenFile', edf_filename);
+    if failed ~= 0
+        error('Failed to open EDF file with name %s', edf_filename);
+    end
+
+    eye_software_ver = 0;
+    [ver, verstr] = Eyelink('GetTrackerVersion');
+    % TODO: any reason we should check dummy_mode instead? Can a successful connection ever return an invalid version number/string?
+    if ver ~= 0
+        [~, vnumcell] = regexp(verstr,'.*?(\d)\.\d*?','Match','Tokens'); % Extract EL version before decimal point
+        eye_software_ver = str2double(vnumcell{1}{1}); % Returns 1 for EyeLink I, 2 for EyeLink II, 3/4 for EyeLink 1K, 5 for EyeLink 1KPlus, 6 for Portable Duo
+        % Print some text in Matlab's Command Window
+        fprintf('Eyelink: Running experiment on %s version %d\n', verstr, ver);
+    end
+
+    Eyelink('Command', 'add_file_preamble_text "%s"', sprintf('motor memory attention task TODO extra info here'));
+
+    % Select which events are saved in the EDF file. Include everything just in case
+    Eyelink('Command', 'file_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,MESSAGE,BUTTON,INPUT');
+    % Select which events are available online for gaze-contingent experiments. Include everything just in case
+    Eyelink('Command', 'link_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,BUTTON,FIXUPDATE,INPUT');
+    % Select which sample data is saved in EDF file or available online. Include everything just in case
+    if eye_software_ver > 3  % Check tracker version and include 'HTARGET' to save head target sticker data for supported eye trackers
+        Eyelink('Command', 'file_sample_data  = LEFT,RIGHT,GAZE,HREF,RAW,AREA,HTARGET,GAZERES,BUTTON,STATUS,INPUT');
+        Eyelink('Command', 'link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,AREA,HTARGET,STATUS,INPUT');
+    else
+        Eyelink('Command', 'file_sample_data  = LEFT,RIGHT,GAZE,HREF,RAW,AREA,GAZERES,BUTTON,STATUS,INPUT');
+        Eyelink('Command', 'link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,AREA,STATUS,INPUT');
+    end
+    
+
     % constants
     X_PITCH = 0.2832; % pixel pitch, specific to "real" monitor
     Y_PITCH = 0.2802; % note the non-squareness (though for sizes/distances < ~45mm)
@@ -24,7 +80,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     if is_debug % tiny window, skip all the warnings
         Screen('Preference', 'SkipSyncTests', 2); 
         Screen('Preference', 'VisualDebugLevel', 0);
-        [w.w, w.rect] = Screen('OpenWindow', max_scr, 50, [0, 0, 800, 800], [], [], [], []);
+        [w.w, w.rect] = Screen('OpenWindow', max_scr, 0, [0, 0, 1000, 1000]);
     else
         % real deal, make sure sync tests work
         % for the display (which is rotated 180 deg), we need
@@ -43,6 +99,19 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     w.fps = Screen('FrameRate', w.w);
     w.ifi = Screen('GetFlipInterval', w.w);
     Priority(MaxPriority(w.w));
+
+    w.max_color = Screen('ColorRange', w.w);
+    w.gray_color = GrayIndex(w.w);
+    w.black_color = BlackIndex(w.w);
+
+    % Eyelink setup, continued
+    eyelink = EyelinkInitDefaults(w.w);
+    eyelink.calibrationtargetsize = 3; % Outer target size as percentage of the screen
+    eyelink.calibrationtargetwidth = 0.7; % Inner target size as percentage of the screen
+    eyelink.backgroundcolour = w.black_color; % NB: try to match luminance of the task
+    eyelink.calibrationtargetcolour = w.gray_color; % see if we need to repmat or not
+    eyelink.msgfontcolour = w.gray_color;
+
     % X11 apparently gets it really wrong with extended screen, but even gets height wrong??
     % actually gets it wrong with single screen too, so...
     % randr seems to nail it though
@@ -60,6 +129,18 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     if ~is_debug
         HideCursor(w.w);
     end
+
+    % Eyelink setup, continued again (now that we have an audio device)
+    pahandle = PsychPortAudio('OpenSlave', sm.aud, 1);
+    eyelink.ppa_pahandle = pahandle;
+    EyelinkUpdateDefaults(eyelink);
+    Eyelink('Command', 'screen_pixel_coords = %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
+    Eyelink('Message', 'DISPLAY_COORDS %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
+    Eyelink('Message', 'calibration_type = HV5'); % horizontal-vertical 5-points, keep it simple
+    Eyelink('Command', 'clear_screen 0');
+
+    EyelinkDoTrackerSetup(eyelink);
+
 
     % alloc temporary data for input events
     evts(1:20) = struct('t', 0, 'x', 0, 'y', 0);
@@ -93,7 +174,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     while (beginning_state = sm.get_state())
         % break if esc pressed
         [~, ~, keys] = KbCheck(-1); % query all keyboards
-        if keys(ESC)
+        if keys(ESC) && vbl_time > ref_time + 10
             error('Escape was pressed.');
         end
 
@@ -220,8 +301,8 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         frame_count = frame_count + 1; % grows forever/applies across entire experiment
     end
 
-    KbQueueStop(dev.index);
-    KbQueueRelease(dev.index);
+    KbQueueStop(joy);
+    KbQueueRelease(joy);
     DrawFormattedText(w.w, 'Finished, saving data...', 'center', 'center', 255);
     last_flip_time = Screen('Flip', w.w);
 
