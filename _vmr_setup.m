@@ -14,7 +14,7 @@ function _vmr_setup(is_debug, is_short)
     catch err
         % clean up PTB here
         % Do we need anything else? Audio/input/..
-        _cleanup();
+        _cleanup(1, '');
         rethrow(err);
     end
 end

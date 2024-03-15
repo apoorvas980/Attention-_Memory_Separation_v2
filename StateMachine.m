@@ -23,6 +23,7 @@ classdef StateMachine < handle
         debounce = 0 % make sure that they're not already in the start position when RETURN_TO_CENTER begins
         current_sound
         last_event = struct('x', 0, 'y', 0)
+        last_eye_event = struct('x', 0, 'y', 0)
         state_exit_time
 
         % these are mostly useful for drawing
@@ -77,7 +78,7 @@ classdef StateMachine < handle
 
         end % StateMachine constructor
 
-        function update(sm, evts, last_vbl)
+        function update(sm, evts, last_vbl, eye_evts)
 
             % NB: evt might be empty
             % This function only runs once a frame on the latest input event
@@ -98,10 +99,29 @@ classdef StateMachine < handle
                 sm.cursor.y = sm.last_event.y;
             end
 
+            % check if eye sample(s) inside the center target
+            gaze_in_center = 1; % assume the best intentions by default
+            for evt = eye_evts
+                sm.last_eye_event.x = evt.x;
+                sm.last_eye_event.y = evt.y;
+                new_gaze_val = point_in_circle([evt.x evt.y],
+                                               [sm.center.x sm.center.y], ...
+                                                u.x_mm2px(block.center.size) * 0.5);
+                if new_gaze_val == 0
+                    gaze_in_center = 0;
+                end
+            end
+
             est_next_vbl = last_vbl + w.ifi;
 
             if sm.state == states.RETURN_TO_CENTER
                 if sm.entering()
+                    err = Eyelink('CheckRecording');
+                    if err ~= 0
+                        error('Eyelink is not recording anymore (and not on purpose).');
+                    end
+                    Eyelink('Message', 'TRIALID %d', sm.trial_count);
+                    Eyelink('Command', 'record_status_message "TRIAL %d/%d"', sm.trial_count, length(sm.tgt.trial));
                     sm.trial_start_time = est_next_vbl;
                     sm.attention.vis = false;
                     sm.center.vis = true;
@@ -153,7 +173,7 @@ classdef StateMachine < handle
                 % TODO: deleted debouncing, was that important?
                 if point_in_circle([sm.cursor.x sm.cursor.y],
                                    [sm.center.x sm.center.y], ...
-                                   u.x_mm2px(block.center.size - block.cursor.size) * 0.5)
+                                   u.x_mm2px(block.center.size - block.cursor.size) * 0.5) && gaze_in_center
                     sm.attention.vis = true;
                     status = PsychPortAudio('GetStatus', sm.current_sound);
                     % if the sound is playing, they've held in the center for long enough
@@ -174,7 +194,14 @@ classdef StateMachine < handle
                     hold_time = 1;
                     t_pred = PredictVisualOnsetForTime(w.w, est_next_vbl + hold_time);
                     % TODO: make sure device is idle (not playing?) before this!
+                    status = PsychPortAudio('GetStatus', sm.current_sound);
+                    % if the sound is playing, they've held in the center for long enough
+
+                    % if status.Active
                     PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
+                    % else
+                    %     PsychPortAudio('Start', sm.current_sound, 1, t_pred, 0);
+                    % end
                 end
             end % RETURN_TO_CENTER
 
@@ -183,6 +210,10 @@ classdef StateMachine < handle
 
                 if sm.entering()
                     sm.attention.vis = false;
+                end
+
+                if ~gaze_in_center
+                    sm.state = states.STOPPED_FIXATING;
                 end
                 % Movement trial logic
                 % Implement logic for Movement trials
@@ -293,6 +324,9 @@ classdef StateMachine < handle
                     sm.attention.vis = false;
                     % at some variable time, show the probe
                 end
+                if ~gaze_in_center
+                    sm.state = states.STOPPED_FIXATING;
+                end
                 % stuff that happens every frame
                 time_into_trial = est_next_vbl - sm.beep_start_time;
 
@@ -302,33 +336,37 @@ classdef StateMachine < handle
                     sm.press_time = press_time - trial.probe.onset_time - sm.beep_start_time;
                 end
 
-                % start with failure conditions
-                if ~point_in_circle([sm.cursor.x sm.cursor.y],
-                                    [sm.center.x sm.center.y], ...
-                                     u.x_mm2px(block.center.size - block.cursor.size) * 0.5)
-                    sm.state = states.PROBE_MOVED;
-                end
-
-                if ~sm.probe.vis && sm.press_time
-                    m.state = states.PROBE_EARLY_PRESS;
-                end
-
-                if sm.probe.vis && time_into_trial >= (trial.probe.onset_time + 0.8)
-                    sm.state = states.PROBE_LATE_PRESS;
-                end
-
-                        % success
-                if sm.probe.vis && sm.press_time
-                    sm.state = states.PROBE_GOOD;
-                end
-
-                % only draw the probe after checking all success/failure conditions
                 if ~sm.probe.vis && time_into_trial >= trial.probe.onset_time
                     % draw the probe
                     sm.probe.vis = true;
                     sm.probe.x = trial.probe.x;
                     sm.probe.y = trial.probe.y;
                 end
+
+                % start with failure conditions
+                if ~point_in_circle([sm.cursor.x sm.cursor.y],
+                                    [sm.center.x sm.center.y], ...
+                                     u.x_mm2px(block.center.size - block.cursor.size) * 0.5)
+                    sm.probe.vis = false;
+                    sm.state = states.PROBE_MOVED;
+                end
+
+                if ~sm.probe.vis && sm.press_time
+                    sm.probe.vis = false;
+                    sm.state = states.PROBE_EARLY_PRESS;
+                end
+
+                if sm.probe.vis && time_into_trial >= (trial.probe.onset_time + 0.8)
+                    sm.probe.vis = false;
+                    sm.state = states.PROBE_LATE_PRESS;
+                end
+
+                        % success
+                if sm.probe.vis && sm.press_time
+                    sm.probe.vis = false;
+                    sm.state = states.PROBE_GOOD;
+                end
+
 
             end % PROBE
 
@@ -405,6 +443,24 @@ classdef StateMachine < handle
                     end
                 end
             end % PROBE_GOOD %%attention trials were here
+
+            if sm.state == states.STOPPED_FIXATING
+                if sm.entering()
+                    sm.cursor.vis = false;
+                    sm.state_exit_time = est_next_vbl + block.punishment_time;
+                end
+                        % stuff that happens every frame
+                if est_next_vbl >= sm.state_exit_time
+                    if (sm.trial_count + 1) > length(tgt.trial)
+                        sm.state = states.END;
+                    else
+                        sm.state = states.RETURN_TO_CENTER;
+                        sm.trial_count = sm.trial_count + 1;
+                        sm.within_trial_frame_count = 1;
+                        sm.probe.vis = false;
+                    end
+                end % STOPPED_FIXATING
+            end
         end % update
 
 
@@ -420,6 +476,19 @@ classdef StateMachine < handle
             w = sm.w.w;
             wh = sm.w.rect(4);
             u = sm.un;
+
+            % clear to black on the eyelink display
+            % Eyelink('Message', '!V CLEAR %d %d %d', 0, 0, 0); % we're not using DataViewer, does it even matter?
+            Eyelink('Command', 'clear_screen 0');
+            Eyelink('Command', 'draw_cross %d %d 15 ', sm.last_eye_event.x, sm.last_eye_event.y);
+
+            % draw where they're looking
+            if 1 % turn off after debugging
+                xys(:, counter) = [sm.last_eye_event.x sm.last_eye_event.y];
+                sizes(counter) = 10; % px
+                colors(:, counter) = [255, 0, 0]; % red
+                counter = counter + 1;
+            end
 
             % draw circles first
             if sm.center.vis
@@ -478,6 +547,8 @@ classdef StateMachine < handle
                 txt = 'Pressed too late.';
             elseif sm.state == states.PROBE_MOVED
                 txt = 'Do not move on probe trial.';
+            elseif sm.state == states.STOPPED_FIXATING
+                txt = 'Remember to keep fixating on the starting target.';
             end
 
             if txt
@@ -529,6 +600,7 @@ classdef StateMachine < handle
         function state = set.state(sm, value)
             sm.is_transitioning = true; % assume we always mean to call transition stuff when calling this
             sm.state = value;
+            Eyelink('Message', 'STATE %d', value);
         end
     end % private methods
 

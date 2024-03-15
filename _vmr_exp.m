@@ -120,7 +120,6 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
 
     InitializePsychSound(1);
 
-    % TODO: add group
     sm = StateMachine(settings.base_path, tgt, w, unit);
 
     % hide the cursor
@@ -138,12 +137,27 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     Eyelink('Message', 'DISPLAY_COORDS %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
     Eyelink('Message', 'calibration_type = HV5'); % horizontal-vertical 5-points, keep it simple
     Eyelink('Command', 'clear_screen 0');
-
+    % other setup
+    Eyelink('Command', 'binocular_enabled = NO');
+    Eyelink('Command', 'sample_rate = 1000');
+    % *could* set eye here too, but better to try to figure out "dominant" eye (maybe??)/see which one is easier to track
+    % Eyelink('Command', 'active_eye = LEFT');
+    
     EyelinkDoTrackerSetup(eyelink);
 
+    % finish eyetracker setup
+    Eyelink('SetOfflineMode'); % TODO: why do we do this?
+    Eyelink('StartRecording'); % Start tracker recording
+    WaitSecs(0.1);
+    used_eye = Eyelink('EyeAvailable');
+    if ~dummy_mode && used_eye == 2
+        error('Oops, eyetracker is set as binocular!');
+    end
 
     % alloc temporary data for input events
     evts(1:20) = struct('t', 0, 'x', 0, 'y', 0);
+
+    eye_evts(1:30) = struct('t', 0, 'x', 0, 'y', 0);
 
     ListenChar(-1); % disable keys landing in console
 
@@ -235,16 +249,25 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
             evts(i).y = v(4) + center.y;
         end
 
+        % pump eyelink events here
+        j = 0;
+        while (sample_type = Eyelink('GetNextDataType'))
+            if sample_type == eyelink.SAMPLE_TYPE
+                j = j + 1;
+                eye_evt = Eyelink('GetFloatData', sample_type);
+                eye_evts(j).x = eye_evt.gx(used_eye+1); % these are in pixels
+                eye_evts(j).y = eye_evt.gy(used_eye+1);
+                eye_evts(j).t = eye_evt.time;
+            end
+        end
+
         % when we increment a trial, we can reset within_trial_frame_count to 1
         % for the state machine, implement fallthrough by consecutive `if ...`
         % grab counters before they're updated for this frame
         [trial_count, within_trial_frame_count] = sm.get_counters();
-        if n_evts < 1
-            sm.update([], vbl_time);
-        else
-            % pass all input events so we can get a decent RT if need be
-            sm.update(evts(1:n_evts), vbl_time);
-        end
+        % pass all input events so we can get a decent RT if need be
+        sm.update(evts(1:n_evts), vbl_time, eye_evts(1:j));
+
         sm.draw(); % instantiate visuals
         t1 = GetSecs();
         Screen('DrawingFinished', w.w);
@@ -256,6 +279,11 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
             % disp('test')
             % TODO: should we store (redundant) position in physical units, or leave for post-processing?
         end
+        for i = 1:j
+            data.trials.frames(trial_count).eye_events(within_trial_frame_count).t(i) = eye_evts(i).t;
+            data.trials.frames(trial_count).eye_events(within_trial_frame_count).x(i) = unit.x_px2mm(eye_evts(i).x);
+            data.trials.frames(trial_count).eye_events(within_trial_frame_count).y(i) = unit.y_px2mm(eye_evts(i).y);
+        end
         ending_state = sm.get_state();
         % take subset to reduce storage size (& because anything else is junk)
         % again, I *really* wish I could just take an equivalent to a numpy view...
@@ -266,11 +294,15 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         data.trials.frames(trial_count).input_events(within_trial_frame_count).t = data.trials.frames(trial_count).input_events(within_trial_frame_count).t(1:n_evts);
         data.trials.frames(trial_count).input_events(within_trial_frame_count).x = data.trials.frames(trial_count).input_events(within_trial_frame_count).x(1:n_evts);
         data.trials.frames(trial_count).input_events(within_trial_frame_count).y = data.trials.frames(trial_count).input_events(within_trial_frame_count).y(1:n_evts);
+        data.trials.frames(trial_count).eye_events(within_trial_frame_count).t = data.trials.frames(trial_count).eye_events(within_trial_frame_count).t(1:j);
+        data.trials.frames(trial_count).eye_events(within_trial_frame_count).x = data.trials.frames(trial_count).eye_events(within_trial_frame_count).x(1:j);
+        data.trials.frames(trial_count).eye_events(within_trial_frame_count).y = data.trials.frames(trial_count).eye_events(within_trial_frame_count).y(1:j);
 
         % swap buffers
         % use vbl_time to schedule subsequent flips, and disp_time for actual
         % stimulus onset time
         [vbl_time, disp_time, ~, missed, ~] = Screen('Flip', w.w, vbl_time + 0.95 * w.ifi);
+        Eyelink('Message', 'BLANK_SCREEN');
         % done the frame, we'll write frame data now?
         data.trials.frames(trial_count).frame_count(within_trial_frame_count) = frame_count;
         data.trials.frames(trial_count).vbl_time(within_trial_frame_count) = vbl_time;
@@ -333,6 +365,8 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     data.block.pixel_pitch = [X_PITCH Y_PITCH];
     data.block.start_unix = start_unix; % whole seconds since unix epoch
     data.block.start_dt = start_dt;
+    data.block.eyelink_software_ver = verstr; % TODO: check these with a real device!
+    data.block.eyelink_hw_ver = ver; % 
     % mapping from numbers to strings for state
     % these should be in order, so indexing directly (after +1, depending on lang) with `start_state`/`end_state` should work (I hope)
     warning('off', 'Octave:classdef-to-struct');
@@ -358,7 +392,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     DrawFormattedText(w.w, 'Done!', 'center', 'center', 255);
     last_flip_time = Screen('Flip', w.w);
     WaitSecs('UntilTime', last_flip_time + 1);
-    _cleanup(); % clean up
+    _cleanup(dummy_mode, settings.data_path); % clean up
     % profile off;
     % profshow;
 end

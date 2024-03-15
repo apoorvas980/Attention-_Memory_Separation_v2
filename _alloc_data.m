@@ -13,13 +13,19 @@
 
 function data = _alloc_data(n_trials)
     MAX_INPUT_EVENTS_FRAME = 10;
-    z =  zeros(MAX_INPUT_EVENTS_FRAME, 1);
+    z = zeros(MAX_INPUT_EVENTS_FRAME, 1);
     input_evts = struct('t', z, ...
                         'x', z, ...
                         'y', z);
+
+    MAX_EYE_EVENTS_FRAME = 60;
+    z = zeros(MAX_EYE_EVENTS_FRAME, 1);
+    eye_evts = struct('t', z, ...
+                      'x', z, ...
+                      'y', z);
     
     % each frame
-    MAX_FRAMES_PER_TRIAL = 240 * 20; % 20 seconds
+    MAX_FRAMES_PER_TRIAL = 240 * 30; % 20 seconds
     z = zeros(MAX_FRAMES_PER_TRIAL, 1);
     frames = struct('frame_count', z, ...
                     'vbl_time', z, ...
@@ -32,6 +38,7 @@ function data = _alloc_data(n_trials)
                     %'target', struct('x', z, 'y', z, 'vis', z), ...
                     'missed_frame_deadline', z);
     frames.input_events(1:MAX_FRAMES_PER_TRIAL) = input_evts;
+    frames.eye_events(1:MAX_FRAMES_PER_TRIAL) = eye_evts;
     
     MAX_TRIALS = n_trials; % set based on trial table size
 

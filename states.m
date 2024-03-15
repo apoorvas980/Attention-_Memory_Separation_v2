@@ -16,5 +16,7 @@ classdef states
         PROBE_LATE_PRESS = 8
         PROBE_MOVED = 9
         PROBE_GOOD = 10
+
+        STOPPED_FIXATING = 11
     end
 end
