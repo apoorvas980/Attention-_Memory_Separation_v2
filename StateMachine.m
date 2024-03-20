@@ -480,7 +480,11 @@ classdef StateMachine < handle
             % clear to black on the eyelink display
             % Eyelink('Message', '!V CLEAR %d %d %d', 0, 0, 0); % we're not using DataViewer, does it even matter?
             Eyelink('Command', 'clear_screen 0');
-            Eyelink('Command', 'draw_cross %d %d 15 ', sm.last_eye_event.x, sm.last_eye_event.y);
+            sz = block.center.size * 0.5;
+            x = sm.center.x;
+            y = sm.center.y;
+            Eyelink('Command', 'draw_box %d %d %d %d 7', x - sz, y - sz, x + sz, y + sz);
+            Eyelink('Command', 'draw_cross %d %d 15', sm.last_eye_event.x, sm.last_eye_event.y);
 
             % draw where they're looking
             if 1 % turn off after debugging
