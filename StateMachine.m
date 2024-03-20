@@ -100,15 +100,15 @@ classdef StateMachine < handle
             end
 
             % check if eye sample(s) inside the center target
-            gaze_in_center = 1; % assume the best intentions by default
+            gaze_in_target = 1; % assume the best intentions by default
             for evt = eye_evts
                 sm.last_eye_event.x = evt.x;
                 sm.last_eye_event.y = evt.y;
                 new_gaze_val = point_in_circle([evt.x evt.y],
-                                               [sm.center.x sm.center.y], ...
-                                                u.x_mm2px(block.center.size) * 0.5);
+                                               [sm.target.x sm.target.y], ...
+                                                u.x_mm2px(block.target.size) * 0.5);
                 if new_gaze_val == 0
-                    gaze_in_center = 0;
+                    gaze_in_target = 0;
                 end
             end
 
@@ -173,7 +173,7 @@ classdef StateMachine < handle
                 % TODO: deleted debouncing, was that important?
                 if point_in_circle([sm.cursor.x sm.cursor.y],
                                    [sm.center.x sm.center.y], ...
-                                   u.x_mm2px(block.center.size - block.cursor.size) * 0.5) && gaze_in_center
+                                   u.x_mm2px(block.center.size - block.cursor.size) * 0.5) && gaze_in_target
                     sm.attention.vis = true;
                     status = PsychPortAudio('GetStatus', sm.current_sound);
                     % if the sound is playing, they've held in the center for long enough
@@ -212,7 +212,7 @@ classdef StateMachine < handle
                     sm.attention.vis = false;
                 end
 
-                if ~gaze_in_center
+                if ~gaze_in_target
                     sm.state = states.STOPPED_FIXATING;
                 end
                 % Movement trial logic
@@ -324,7 +324,7 @@ classdef StateMachine < handle
                     sm.attention.vis = false;
                     % at some variable time, show the probe
                 end
-                if ~gaze_in_center
+                if ~gaze_in_target
                     sm.state = states.STOPPED_FIXATING;
                 end
                 % stuff that happens every frame
@@ -480,10 +480,10 @@ classdef StateMachine < handle
             % clear to black on the eyelink display
             % Eyelink('Message', '!V CLEAR %d %d %d', 0, 0, 0); % we're not using DataViewer, does it even matter?
             Eyelink('Command', 'clear_screen 0');
-            sz = block.center.size * 0.5;
+            sz = u.x_mm2px(block.center.size) * 0.5;
             x = sm.center.x;
             y = sm.center.y;
-            Eyelink('Command', 'draw_box %d %d %d %d 7', x - sz, y - sz, x + sz, y + sz);
+            Eyelink('Command', 'draw_box %d %d %d %d 7', floor(x - sz), floor(y - sz), ceil(x + sz), ceil(y + sz));
             Eyelink('Command', 'draw_cross %d %d 15', sm.last_eye_event.x, sm.last_eye_event.y);
 
             % draw where they're looking
@@ -536,6 +536,7 @@ classdef StateMachine < handle
             end
 
             if counter > 1
+                counter = counter - 1;
                 Screen('DrawDots', w, xys(:, 1:counter), sizes(1:counter), colors(:, 1:counter), [], 3, 1);
             end
 
