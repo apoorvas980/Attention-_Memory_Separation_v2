@@ -197,11 +197,11 @@ classdef StateMachine < handle
                     status = PsychPortAudio('GetStatus', sm.current_sound);
                     % if the sound is playing, they've held in the center for long enough
 
-                    % if status.Active
-                    PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
-                    % else
-                    %     PsychPortAudio('Start', sm.current_sound, 1, t_pred, 0);
-                    % end
+                    if status.Active
+                        PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
+                    else
+                        PsychPortAudio('Start', sm.current_sound, 1, t_pred, 0);
+                    end
                 end
             end % RETURN_TO_CENTER
 
@@ -484,7 +484,7 @@ classdef StateMachine < handle
             x = sm.center.x;
             y = sm.center.y;
             Eyelink('Command', 'draw_box %d %d %d %d 7', floor(x - sz), floor(y - sz), ceil(x + sz), ceil(y + sz));
-            Eyelink('Command', 'draw_cross %d %d 15', sm.last_eye_event.x, sm.last_eye_event.y);
+            Eyelink('Command', 'draw_cross %d %d 15', floor(sm.last_eye_event.x), floor(sm.last_eye_event.y));
 
             % draw where they're looking
             if 1 % turn off after debugging
@@ -602,7 +602,7 @@ classdef StateMachine < handle
 
         % Octave buglet? can set state here even though method access is private
         % but fixed by restricting property access, so not an issue for me
-        function state = set.state(sm, value)
+        function sm = set.state(sm, value)
             sm.is_transitioning = true; % assume we always mean to call transition stuff when calling this
             sm.state = value;
             Eyelink('Message', 'STATE %d', value);
