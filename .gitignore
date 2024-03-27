@@ -6,3 +6,4 @@ data/test_*.json*
 .Rproj.user
 *.Rhistory
 *.png
+data/test_*.edf

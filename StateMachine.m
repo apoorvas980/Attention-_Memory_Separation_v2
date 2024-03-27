@@ -73,8 +73,8 @@ classdef StateMachine < handle
             sm.beeps('high') = PsychPortAudio('OpenSlave', sm.aud, 1);
             PsychPortAudio('FillBuffer', sm.beeps('high'), hi);
 
-            sm.beeps('over') = PsychPortAudio('OpenSlave', sm.aud, 1);
-            PsychPortAudio('FillBuffer', sm.beeps('over'), over);
+            % sm.beeps('over') = PsychPortAudio('OpenSlave', sm.aud, 1);
+            % PsychPortAudio('FillBuffer', sm.beeps('over'), over);
 
         end % StateMachine constructor
 
@@ -106,7 +106,7 @@ classdef StateMachine < handle
                 sm.last_eye_event.y = evt.y;
                 new_gaze_val = point_in_circle([evt.x evt.y],
                                                [sm.target.x sm.target.y], ...
-                                                u.x_mm2px(block.target.size) * 0.5);
+                                                u.x_mm2px(block.target.size) * 0.5 * 2); % try double the radius to make it a little easier
                 if new_gaze_val == 0
                     gaze_in_target = 0;
                 end
@@ -138,19 +138,11 @@ classdef StateMachine < handle
                     % subtract to put toward top of the screen
                     sm.target.y = sm.center.y - u.x_mm2px(block.target.distance);
 
-                    % see tests/box_test.m for minimal drawing example
-                    attention_locations = block.attention_locations{trial.attention_type};
-
-                    if ~isempty(attention_locations)
-                        attention_xys = u.x_mm2px(attention_locations);
-                        attention_xys(:, 1) = sm.center.x - attention_xys(:, 1);
-                        attention_xys(:, 2) = sm.center.y - attention_xys(:, 2);
-                        attention_size = u.x_mm2px(block.attention.size);
-                        rects = CenterRectOnPoint(attention_size, attention_xys(:, 1), attention_xys(:, 2));
-                        sm.attention.rects = rects;
-                    else
-                        sm.attention.rects = [];
-                    end
+                    Eyelink('Command', 'clear_screen 0');
+                    sz = u.x_mm2px(block.target.size) * 0.5;
+                    x = sm.target.x;
+                    y = sm.target.y;
+                    Eyelink('Command', 'draw_box %d %d %d %d 7', floor(x - sz), floor(y - sz), ceil(x + sz), ceil(y + sz));
 
                     % schedule sound onset
                     if trial.reach_or_probe == 1 % reach
@@ -163,6 +155,7 @@ classdef StateMachine < handle
 
                     hold_time = 1;
                     t_pred = PredictVisualOnsetForTime(w.w, est_next_vbl + hold_time);
+                    PsychPortAudio('Stop', sm.current_sound);
                     PsychPortAudio('Start', sm.current_sound, 1, t_pred, 0);
 
                 end
@@ -200,6 +193,7 @@ classdef StateMachine < handle
                     if status.Active
                         PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
                     else
+                        PsychPortAudio('Stop', sm.current_sound);
                         PsychPortAudio('Start', sm.current_sound, 1, t_pred, 0);
                     end
                 end
@@ -226,19 +220,9 @@ classdef StateMachine < handle
                     sm.cursor.vis = false;
                 end
 
-                % TODO: double check that directions actually work
-                if trial.attention_type == 1
-                    angs = block.angles;
-                elseif trial.attention_type == 2
-                    angs = flip(block.angles);
-                else
-                    error('Unknown attention type!');
-                end
-
-                %target_angle = atan2d(sm.target.y - sm.center.y, sm.target.x - sm.center.x);
                 d = distance(sm.cursor.x, sm.center.x, sm.cursor.y, sm.center.y);
-                sm.cursor.x = d * cosd(angs(1)) + sm.center.x;
-                sm.cursor.y = d * sind(angs(2)) + sm.center.y;
+                sm.cursor.x = d * cosd(trial.clamp_angle) + sm.center.x;
+                sm.cursor.y = d * sind(trial.clamp_angle) + sm.center.y;
 
                 if (last_vbl - sm.beep_start_time > block.max_movement_rt) && ...
                     point_in_circle([sm.cursor.x sm.cursor.y],
@@ -297,7 +281,7 @@ classdef StateMachine < handle
                 if sm.entering()
                     sm.cursor.vis = false;
                     sm.state_exit_time = est_next_vbl + block.success_time;
-                    PsychPortAudio('Start', sm.beeps('over'), 1, 0, 0);
+                    %PsychPortAudio('Start', sm.beeps('over'), 1, 0, 0);
                     %disp(block.success_time)
                 end
                         %disp(sm.state_exit_time)
@@ -339,8 +323,15 @@ classdef StateMachine < handle
                 if ~sm.probe.vis && time_into_trial >= trial.probe.onset_time
                     % draw the probe
                     sm.probe.vis = true;
-                    sm.probe.x = trial.probe.x;
-                    sm.probe.y = trial.probe.y;
+                    % sm.probe.x = trial.probe.x + sm.center.x;
+                    % sm.probe.y = trial.probe.y + sm.center.y;
+                    d = u.x_mm2px(trial.probe.r);
+                    theta = trial.probe.theta;
+                    d2 = distance(sm.center.x, sm.target.x, sm.center.y, sm.target.y)*0.5;
+                    sm.probe.x = d * cosd(theta) + sm.center.x;
+                    sm.probe.y = d * sind(theta) + sm.center.y;
+                    % fprintf('s_x: %.2f, s_y: %.2f, e_x: %.2f, e_y: %.2f, pr_x: %.2f, pr_y: %.2f\n', sm.center.x, sm.center.y, sm.target.x, sm.target.y, sm.probe.x, sm.probe.y)
+                    %fprintf('probe x: %.3f, y: %.3f, r: %.3f, r2: %.3f, theta: %.3f\n', sm.probe.x, sm.probe.y, d, d2, theta);
                 end
 
                 % start with failure conditions
@@ -429,7 +420,7 @@ classdef StateMachine < handle
                 if sm.entering()
                     sm.cursor.vis = false;
                     sm.state_exit_time = est_next_vbl + block.success_time;
-                    PsychPortAudio('Start', sm.beeps('over'), 1, 0, 0);
+                    %PsychPortAudio('Start', sm.beeps('over'), 1, 0, 0);
                 end
                         % stuff that happens every frame
                 if est_next_vbl >= sm.state_exit_time
@@ -479,15 +470,9 @@ classdef StateMachine < handle
 
             % clear to black on the eyelink display
             % Eyelink('Message', '!V CLEAR %d %d %d', 0, 0, 0); % we're not using DataViewer, does it even matter?
-            Eyelink('Command', 'clear_screen 0');
-            sz = u.x_mm2px(block.center.size) * 0.5;
-            x = sm.center.x;
-            y = sm.center.y;
-            Eyelink('Command', 'draw_box %d %d %d %d 7', floor(x - sz), floor(y - sz), ceil(x + sz), ceil(y + sz));
-            Eyelink('Command', 'draw_cross %d %d 15', floor(sm.last_eye_event.x), floor(sm.last_eye_event.y));
 
             % draw where they're looking
-            if 1 % turn off after debugging
+            if 0 % turn off after debugging
                 xys(:, counter) = [sm.last_eye_event.x sm.last_eye_event.y];
                 sizes(counter) = 10; % px
                 colors(:, counter) = [255, 0, 0]; % red
@@ -517,21 +502,19 @@ classdef StateMachine < handle
             end
 
             if sm.probe.vis
-                mid_x = (sm.center.x + sm.target.x) * 0.5;
-                mid_y = (sm.center.y + sm.target.y) * 0.5;
-                px = u.x_mm2px(trial.probe.x) + mid_x;
-                py = u.y_mm2px(trial.probe.y) + mid_y;
+                % mid_x = (sm.center.x + sm.target.x) * 0.5;
+                % mid_y = (sm.center.y + sm.target.y) * 0.5;
+                px = (sm.probe.x);
+                py = (sm.probe.y);
                 xys(:, counter) = [px py];
                 sizes(counter) = u.x_mm2px(block.probe.size);
                 colors(:, counter) = block.probe.color;
                 counter = counter + 1;
             end
 
-            if sm.attention.vis && ~isempty(sm.attention.rects) && trial.attention_type == 1
-                % Screen('DrawText', w, block.attention.color, sm.attention.rects.');
+            if sm.attention.vis && trial.attention_type == 1
                 DrawFormattedText(w, 'left', 'center', 0.6 * wh, [222, 75, 75]);
-            elseif sm.attention.vis && ~isempty(sm.attention.rects) && trial.attention_type == 2
-                % Screen('DrawText', w, block.attention.color, sm.attention.rects.');
+            elseif sm.attention.vis && trial.attention_type == 2
                 DrawFormattedText(w, 'right', 'center', 0.6 * wh, [222, 75, 75]);
             end
 

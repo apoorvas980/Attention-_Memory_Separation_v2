@@ -34,7 +34,7 @@ function vmr_inner(is_debug, is_short)
         end
     end
 
-    group = x_or_y('Group 1 or 2? ', ["1", "2"]);
+    group = x_or_y('Group 1, 2, or 3? ', ["1", "2", "3"]);
     block_type = x_or_y('Is this the practice (p) or main task (m)? ', ["p", "m"]);
     _vmr_exp(is_debug, is_short, group, block_type, settings);
 end

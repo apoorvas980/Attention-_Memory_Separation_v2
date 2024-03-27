@@ -25,8 +25,10 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
 
     % note that the usual participant ID (msl***) is far too long, so we just take the last 5 numbers and hope for the best
     id = settings.id;
-    slice = min(length(id) - 1, 5);
-    edf_filename = strcat(settings.id(end-slice:end), '_', num2str(start_unix)); % TODO: need to include EDF extension?
+    slice = min(length(id) - 1, 4);
+    ts_subset = num2str(start_unix);
+    ts_subset = ts_subset(end-3:end);
+    edf_filename = strcat(settings.id(end-slice:end), '_', num2str(ts_subset)); % TODO: need to include EDF extension?
     edf_filename = edf_filename(1:8); % because we're in the stone ages and can't have a longer filename than 8 chars
     failed = Eyelink('OpenFile', edf_filename);
     if failed ~= 0
@@ -60,8 +62,9 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     
 
     % constants
-    X_PITCH = 0.2832; % pixel pitch, specific to "real" monitor
-    Y_PITCH = 0.2802; % note the non-squareness (though for sizes/distances < ~45mm)
+    % 600mm x, roughly assume 1920x1080 holds. Therefore
+    X_PITCH = 0.3125; % pixel pitch, specific to "real" monitor
+    Y_PITCH = 0.3125; % Ignoring non-squareness, probably slightly different "for real"?
     unit = Unitizer(X_PITCH, Y_PITCH);
 
     tgt = make_tgt(settings.id, block_type, is_short, group);
@@ -111,7 +114,19 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     eyelink.backgroundcolour = w.black_color; % NB: try to match luminance of the task
     eyelink.calibrationtargetcolour = w.gray_color; % see if we need to repmat or not
     eyelink.msgfontcolour = w.gray_color;
-
+    eyelink.feedbackbeep = 0;
+    eyelink.targetbeep = 0;
+    EyelinkUpdateDefaults(eyelink);
+    Eyelink('Command', 'screen_pixel_coords = %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
+    Eyelink('Message', 'DISPLAY_COORDS %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
+    Eyelink('Command', 'calibration_type = HV5'); % horizontal-vertical 5-points, keep it simple
+    Eyelink('Command', 'clear_screen 0');
+    % other setup
+    Eyelink('Command', 'binocular_enabled = NO');
+    Eyelink('Command', 'sample_rate = 1000');
+    % *could* set eye here too, but better to try to figure out "dominant" eye (maybe??)/see which one is easier to track
+    % Eyelink('Command', 'active_eye = LEFT');
+    
     % X11 apparently gets it really wrong with extended screen, but even gets height wrong??
     % actually gets it wrong with single screen too, so...
     % randr seems to nail it though
@@ -119,7 +134,6 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     % [w.disp.width, w.disp.height] = Screen('DisplaySize', max_scr);
 
     InitializePsychSound(1);
-
     sm = StateMachine(settings.base_path, tgt, w, unit);
 
     % hide the cursor
@@ -129,23 +143,8 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         HideCursor(w.w);
     end
 
-    % Eyelink setup, continued again (now that we have an audio device)
-    pahandle = PsychPortAudio('OpenSlave', sm.aud, 1);
-    eyelink.ppa_pahandle = pahandle;
-    EyelinkUpdateDefaults(eyelink);
-    Eyelink('Command', 'screen_pixel_coords = %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
-    Eyelink('Message', 'DISPLAY_COORDS %ld %ld %ld %ld', 0, 0, w.rect(3) - 1, w.rect(4) - 1);
-    Eyelink('Message', 'calibration_type = HV5'); % horizontal-vertical 5-points, keep it simple
-    Eyelink('Command', 'clear_screen 0');
-    % other setup
-    Eyelink('Command', 'binocular_enabled = NO');
-    Eyelink('Command', 'sample_rate = 1000');
-    % *could* set eye here too, but better to try to figure out "dominant" eye (maybe??)/see which one is easier to track
-    % Eyelink('Command', 'active_eye = LEFT');
-    
-    EyelinkDoTrackerSetup(eyelink);
-
     % finish eyetracker setup
+    EyelinkDoTrackerSetup(eyelink);
     Eyelink('SetOfflineMode'); % TODO: why do we do this?
     Eyelink('StartRecording'); % Start tracker recording
     WaitSecs(0.1);
@@ -302,7 +301,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         % use vbl_time to schedule subsequent flips, and disp_time for actual
         % stimulus onset time
         [vbl_time, disp_time, ~, missed, ~] = Screen('Flip', w.w, vbl_time + 0.95 * w.ifi);
-        Eyelink('Message', 'BLANK_SCREEN');
+        % Eyelink('Message', 'BLANK_SCREEN');
         % done the frame, we'll write frame data now?
         data.trials.frames(trial_count).frame_count(within_trial_frame_count) = frame_count;
         data.trials.frames(trial_count).vbl_time(within_trial_frame_count) = vbl_time;
