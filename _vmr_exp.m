@@ -327,6 +327,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
             data.trials.center_px(trial_count) = struct('x', sm.center.x, 'y', sm.center.y);
             data.trials.target_px(trial_count) = struct('x', sm.target.x, 'y', sm.target.y);
             data.trials.probe_px(trial_count) = struct('x', sm.probe.x, 'y', sm.probe.y);
+            data.trials.eyelink_time_offset_ms(trial_count) = Eyelink('TimeOffset');
             was_restarted = false;
             % alternatively, we just save these without context
             for fn = fieldnames(data.trials.frames(trial_count))'
