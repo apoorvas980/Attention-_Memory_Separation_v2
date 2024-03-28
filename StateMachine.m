@@ -6,10 +6,14 @@ classdef StateMachine < handle
         press_time = 0
         failed_this_trial = 0
         aud % audio handle
+        center = struct('vis', false, 'x', 0, 'y', 0)
+        target = struct('vis', false, 'x', 0, 'y', 0)
+        cursor = struct('vis', false, 'x', 0, 'y', 0)
+        probe = struct('vis', false, 'x', 0, 'y', 0)
+        state = states.RETURN_TO_CENTER
     end % public properties
 
     properties (Access = private)
-        state = states.RETURN_TO_CENTER
         is_transitioning = true
         w % window struct
         tgt % trial table
@@ -27,11 +31,8 @@ classdef StateMachine < handle
         state_exit_time
 
         % these are mostly useful for drawing
-        attention = struct('vis', false, 'rects', [])
-        center = struct('vis', false, 'x', 0, 'y', 0)
-        target = struct('vis', false, 'x', 0, 'y', 0)
-        cursor = struct('vis', false, 'x', 0, 'y', 0)
-        probe = struct('vis', false, 'x', 0, 'y', 0)
+        attention = struct('vis', false)
+
 
     end % private properties
 
@@ -239,7 +240,6 @@ classdef StateMachine < handle
 
             end %REACH
 
-
             if sm.state == states.REACH_RT_TOO_SLOW
                 if sm.entering()
                     sm.cursor.vis = false;
@@ -256,7 +256,6 @@ classdef StateMachine < handle
                     end
                 end
             end % REACH_RT_TOO_SLOW
-
 
             if sm.state == states.REACH_MT_TOO_SLOW
                 if sm.entering()
@@ -275,18 +274,13 @@ classdef StateMachine < handle
                 end
             end % REACH_MT_TOO_SLOW
 
-
             if sm.state == states.REACH_GOOD
-                
                 if sm.entering()
                     sm.cursor.vis = false;
                     sm.state_exit_time = est_next_vbl + block.success_time;
                     %PsychPortAudio('Start', sm.beeps('over'), 1, 0, 0);
-                    %disp(block.success_time)
                 end
-                        %disp(sm.state_exit_time)
-                        %disp(est_next_vbl)
-                        % stuff that happens every frame
+                % stuff that happens every frame
                 if est_next_vbl >= sm.state_exit_time
                         %disp('check1')
                     if (sm.trial_count + 1) > length(tgt.trial)
@@ -552,10 +546,6 @@ classdef StateMachine < handle
 
         function state = get_state(sm)
             state = sm.state;
-        end
-
-        function center = get_raw_center_state(sm)
-            center = sm.center;
         end
 
         function [tc, wtc] = get_counters(sm)

@@ -184,7 +184,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
     KbQueueFlush(joy, 2); % only flush KbEventGet
     [trial_count, within_trial_frame_count] = sm.get_counters();
 
-    while (beginning_state = sm.get_state())
+    while (beginning_state = sm.state)
         % break if esc pressed
         [~, ~, keys] = KbCheck(-1); % query all keyboards
         if keys(ESC) && vbl_time > ref_time + 10
@@ -229,7 +229,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         % TODO: does MATLAB do non-copy slices?? This sucks
         % is it faster to make this each frame, or to copy from some preallocated chunk?
         % won't execute if event queue is empty
-        center = sm.get_raw_center_state(); % still in px
+        center = sm.center; % still in px
         for i = 1:n_evts
             % events are in the same coordinates as psychtoolbox (px)
             % eventually, we would figure out mapping so that we get to use
@@ -271,19 +271,21 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         t1 = GetSecs();
         Screen('DrawingFinished', w.w);
         % do other work in our free time
+        % store joystick and eyetracking data in px
+        % NB that joystick is centered on the center position
         for i = 1:n_evts % skips if n_evts == 0
             data.trials.frames(trial_count).input_events(within_trial_frame_count).t(i) = evts(i).t;
-            data.trials.frames(trial_count).input_events(within_trial_frame_count).x(i) = unit.x_px2mm(evts(i).x);
-            data.trials.frames(trial_count).input_events(within_trial_frame_count).y(i) = unit.y_px2mm(evts(i).y);
+            data.trials.frames(trial_count).input_events(within_trial_frame_count).x(i) = evts(i).x;
+            data.trials.frames(trial_count).input_events(within_trial_frame_count).y(i) = evts(i).y;
             % disp('test')
             % TODO: should we store (redundant) position in physical units, or leave for post-processing?
         end
         for i = 1:j
             data.trials.frames(trial_count).eye_events(within_trial_frame_count).t(i) = eye_evts(i).t;
-            data.trials.frames(trial_count).eye_events(within_trial_frame_count).x(i) = unit.x_px2mm(eye_evts(i).x);
-            data.trials.frames(trial_count).eye_events(within_trial_frame_count).y(i) = unit.y_px2mm(eye_evts(i).y);
+            data.trials.frames(trial_count).eye_events(within_trial_frame_count).x(i) = eye_evts(i).x;
+            data.trials.frames(trial_count).eye_events(within_trial_frame_count).y(i) = eye_evts(i).y;
         end
-        ending_state = sm.get_state();
+        ending_state = sm.state;
         % take subset to reduce storage size (& because anything else is junk)
         % again, I *really* wish I could just take an equivalent to a numpy view...
         % disp(n_evts)
@@ -300,7 +302,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
         % swap buffers
         % use vbl_time to schedule subsequent flips, and disp_time for actual
         % stimulus onset time
-        [vbl_time, disp_time, ~, missed, ~] = Screen('Flip', w.w, vbl_time + 0.95 * w.ifi);
+        [vbl_time, disp_time, ~, missed, ~] = Screen('Flip', w.w, vbl_time + 0.5 * w.ifi);
         % Eyelink('Message', 'BLANK_SCREEN');
         % done the frame, we'll write frame data now?
         data.trials.frames(trial_count).frame_count(within_trial_frame_count) = frame_count;
@@ -322,6 +324,9 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
             data.trials.was_restarted(trial_count) = was_restarted;
             data.trials.press_time(trial_count) = sm.press_time;
             data.trials.failed(trial_count) = sm.failed_this_trial;
+            data.trials.center(trial_count) = struct('x', sm.center.x, 'y', sm.center.y);
+            data.trials.target(trial_count) = struct('x', sm.target.x, 'y', sm.target.y);
+            data.trials.probe(trial_count) = struct('x', sm.probe.x, 'y', sm.probe.y);
             was_restarted = false;
             % alternatively, we just save these without context
             for fn = fieldnames(data.trials.frames(trial_count))'

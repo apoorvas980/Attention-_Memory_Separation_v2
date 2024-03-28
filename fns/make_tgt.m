@@ -63,9 +63,6 @@ block_level.attention = struct(...
     'size', [0 0 30 10], ...
     'color', WHITE); 
 
-block_level.text_left = struct('text', 'Left', 'font_size', 12, 'color', 'WHITE');
-block_level.text_right = struct('text', 'Right', 'font_size', 12, 'color', 'WHITE');
-
 block_level.probe_onset_range = [0.2, 0.8]; % seconds
 block_level.max_movement_rt = 0.8;
 block_level.max_movement_mt = 1.4;
