@@ -324,9 +324,9 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
             data.trials.was_restarted(trial_count) = was_restarted;
             data.trials.press_time(trial_count) = sm.press_time;
             data.trials.failed(trial_count) = sm.failed_this_trial;
-            data.trials.center(trial_count) = struct('x', sm.center.x, 'y', sm.center.y);
-            data.trials.target(trial_count) = struct('x', sm.target.x, 'y', sm.target.y);
-            data.trials.probe(trial_count) = struct('x', sm.probe.x, 'y', sm.probe.y);
+            data.trials.center_px(trial_count) = struct('x', sm.center.x, 'y', sm.center.y);
+            data.trials.target_px(trial_count) = struct('x', sm.target.x, 'y', sm.target.y);
+            data.trials.probe_px(trial_count) = struct('x', sm.probe.x, 'y', sm.probe.y);
             was_restarted = false;
             % alternatively, we just save these without context
             for fn = fieldnames(data.trials.frames(trial_count))'

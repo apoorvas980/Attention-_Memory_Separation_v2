@@ -45,7 +45,8 @@ function data = _alloc_data(n_trials)
     % NB: This is where non-boilerplate (for reaching tasks) data starts
     % For better(?) performance, preallocate in sync with gen_tgt
     z = zeros(MAX_TRIALS, 1);
-    trials = struct('was_restarted', z, 'press_time', z);
+    % xys = struct('x', z, 'y', z);
+    trials = struct('was_restarted', z, 'press_time', z, 'failed', z);
     % trials.target(1:MAX_TRIALS) = struct('x', 0, 'y', 0);
     trials.frames(1:MAX_TRIALS) = frames;
     
