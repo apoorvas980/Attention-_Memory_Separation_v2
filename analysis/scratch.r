@@ -22,7 +22,7 @@ signed_diff_angle <- function(a, b) {
   r * sgn
 }
 
-raw_dat <- fload('../data/apoorva3_1711656601.json.gz', max_simplify_lvl='vector')
+raw_dat <- fload('../data/alex_1712157875.json.gz', max_simplify_lvl='vector')
 
 # raw_dat$block has all the block-level settings/top-level configuration
 
