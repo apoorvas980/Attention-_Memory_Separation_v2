@@ -27,7 +27,7 @@ else
     N_PRACTICE_PROBE_TRIALS = 10;
     N_PRACTICE_REACH_TRIALS = 10;
     N_PROBE_TRIALS = 100;
-    N_REACH_TRIALS = 400;
+    N_REACH_TRIALS = 300;
 end
 
 CLAMP_ANGLE = 30; %
@@ -78,7 +78,7 @@ if strcmp(block_type, "p")
     total_trials = N_PRACTICE_PROBE_TRIALS + N_PRACTICE_REACH_TRIALS;
 elseif strcmp(block_type, "m")
     n_attention_types = 2; % left or right
-    reach_or_probe = [repmat(1, 1, N_PROBE_TRIALS/2), repmat(2, 1, N_REACH_TRIALS/2)];
+    reach_or_probe = [repmat(2, 1, N_PROBE_TRIALS/2), repmat(1, 1, N_REACH_TRIALS/2)];
     trial_attention_combos = pairs(reach_or_probe, 1:n_attention_types);
     trial_attention_combos = shuffle_2d(trial_attention_combos);
     total_trials = N_PROBE_TRIALS + N_REACH_TRIALS;

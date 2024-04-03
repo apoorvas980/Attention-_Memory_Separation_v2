@@ -205,7 +205,7 @@ function _vmr_exp(is_debug, is_short, group, block_type, settings)
                 if keys(C)
                     % restart the trial
                     sm.restart_trial();
-                    KbQueueFlush(dev.index, 2);
+                    KbQueueFlush(joy, 2);
                     break
                 end
 

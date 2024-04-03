@@ -191,12 +191,12 @@ classdef StateMachine < handle
                     status = PsychPortAudio('GetStatus', sm.current_sound);
                     % if the sound is playing, they've held in the center for long enough
 
-                    if status.Active
-                        PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
-                    else
+                    % if status.Active
+                    %     PsychPortAudio('RescheduleStart', sm.current_sound, t_pred, 0);
+                    % else
                         PsychPortAudio('Stop', sm.current_sound);
                         PsychPortAudio('Start', sm.current_sound, 1, t_pred, 0);
-                    end
+                    %end
                 end
             end % RETURN_TO_CENTER
 
