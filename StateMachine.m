@@ -8,6 +8,7 @@ classdef StateMachine < handle
         aud % audio handle
         center = struct('vis', false, 'x', 0, 'y', 0)
         target = struct('vis', false, 'x', 0, 'y', 0)
+        side_target = struct('vis', false, 'x', 0, 'y', 0)
         cursor = struct('vis', false, 'x', 0, 'y', 0)
         probe = struct('vis', false, 'x', 0, 'y', 0)
         state = states.RETURN_TO_CENTER
@@ -100,16 +101,16 @@ classdef StateMachine < handle
                 sm.cursor.y = sm.last_event.y;
             end
 
-            % check if eye sample(s) inside the center target
-            gaze_in_target = 1; % assume the best intentions by default
+            % check if eye sample(s) inside the center
+            gaze_in_center = 1; % assume the best intentions by default %new change fron target to center
             for evt = eye_evts
                 sm.last_eye_event.x = evt.x;
                 sm.last_eye_event.y = evt.y;
                 new_gaze_val = point_in_circle([evt.x evt.y],
-                                               [sm.target.x sm.target.y], ...
-                                                u.x_mm2px(block.target.size) * 0.5 * 2); % try double the radius to make it a little easier
+                                               [sm.center.x sm.center.y], ...
+                                                u.x_mm2px(block.center.size) * 0.5 * 2); % try double the radius to make it a little easier
                 if new_gaze_val == 0
-                    gaze_in_target = 0;
+                    gaze_in_center = 0;
                 end
             end
 
@@ -127,6 +128,7 @@ classdef StateMachine < handle
                     sm.attention.vis = false;
                     sm.center.vis = true;
                     sm.target.vis = true;
+                    sm.side_target.vis = true;
                     sm.cursor.vis = true;
                     sm.probe.vis = false;
                     sm.press_time = 0;
@@ -134,15 +136,17 @@ classdef StateMachine < handle
                     sm.debounce = true;
                     sm.center.x = w.center(1) + u.x_mm2px(block.center.offset.x);
                     sm.center.y = w.center(2) + u.y_mm2px(block.center.offset.y);
-                    sm.target.x = sm.center.x;
+                    sm.target.y = sm.center.y; %change new
+                    sm.side_target.y = sm.center.y; %change new
 
-                    % subtract to put toward top of the screen
-                    sm.target.y = sm.center.y - u.x_mm2px(block.target.distance);
+                    % subtract to put toward top of the screen(now side?)
+                    sm.target.x = sm.center.x - u.x_mm2px(block.target.distance);
+                    sm.side_target.x = sm.center.x + u.x_mm2px(block.side_target.distance); %new change; making it plus to change the direction ig?
 
                     Eyelink('Command', 'clear_screen 0');
-                    sz = u.x_mm2px(block.target.size) * 0.5;
-                    x = sm.target.x;
-                    y = sm.target.y;
+                    sz = u.x_mm2px(block.center.size) * 0.5;
+                    x = sm.center.x;
+                    y = sm.center.y;
                     Eyelink('Command', 'draw_box %d %d %d %d 7', floor(x - sz), floor(y - sz), ceil(x + sz), ceil(y + sz));
 
                     % schedule sound onset
@@ -167,7 +171,7 @@ classdef StateMachine < handle
                 % TODO: deleted debouncing, was that important?
                 if point_in_circle([sm.cursor.x sm.cursor.y],
                                    [sm.center.x sm.center.y], ...
-                                   u.x_mm2px(block.center.size - block.cursor.size) * 0.5) && gaze_in_target
+                                   u.x_mm2px(block.center.size - block.cursor.size) * 0.5) && gaze_in_center
                     sm.attention.vis = true;
                     status = PsychPortAudio('GetStatus', sm.current_sound);
                     % if the sound is playing, they've held in the center for long enough
@@ -207,7 +211,7 @@ classdef StateMachine < handle
                     sm.attention.vis = false;
                 end
 
-                if ~gaze_in_target
+                if ~gaze_in_center
                     sm.state = states.STOPPED_FIXATING;
                 end
                 % Movement trial logic
@@ -302,7 +306,7 @@ classdef StateMachine < handle
                     sm.attention.vis = false;
                     % at some variable time, show the probe
                 end
-                if ~gaze_in_target
+                if ~gaze_in_center
                     sm.state = states.STOPPED_FIXATING;
                 end
                 % stuff that happens every frame
@@ -485,6 +489,13 @@ classdef StateMachine < handle
                 xys(:, counter) = [sm.target.x sm.target.y];
                 sizes(counter) = u.x_mm2px(block.target.size);
                 colors(:, counter) = block.target.color;
+                counter = counter + 1;
+            end
+
+            if sm.side_target.vis
+                xys(:, counter) = [sm.side_target.x sm.side_target.y];
+                sizes(counter) = u.x_mm2px(block.side_target.size);
+                colors(:, counter) = block.side_target.color;
                 counter = counter + 1;
             end
 

@@ -17,6 +17,7 @@ desc = {
 GREEN = [0 255 0];
 RED = [255 0 0];
 WHITE = [255 255 255];
+GREY = [128 128 128];
 
 if is_short
     N_PRACTICE_PROBE_TRIALS = 2;
@@ -30,8 +31,8 @@ else
     N_REACH_TRIALS = 300;
 end
 
-CLAMP_ANGLE = 30; %
-ref_angle = 270; % NB: target assumed to be at top of screen!!
+CLAMP_ANGLE = 15; %
+ref_angle = 0; % NB: target assumed to be at top of screen!!
 ang_a = (ref_angle - CLAMP_ANGLE);
 ang_b = (ref_angle + CLAMP_ANGLE);
 angles = struct('left', ang_a, 'right', ang_b);
@@ -56,9 +57,10 @@ block_level.angles = angles;
 block_level.p_incongruent_probe = 0.2;
 
 block_level.cursor = struct('size', 4, 'color', WHITE); % mm, white cursor
-block_level.center = struct('size', 12, 'color', WHITE, 'offset', struct('x', 0, 'y', 80));
+block_level.center = struct('size', 12, 'color', WHITE, 'offset', struct('x', 0, 'y', 0));
 block_level.target = struct('size', 16, 'color', GREEN, 'distance', 120);
-block_level.probe = struct('size', 2, 'color', RED); % probe circle
+block_level.side_target = struct('size', 16, 'color', GREEN, 'distance', 120);
+block_level.probe = struct('size', 16, 'color', GREY); % probe circle
 block_level.attention = struct(...
     'size', [0 0 30 10], ...
     'color', WHITE); 
@@ -129,22 +131,22 @@ for i = 1:total_trials
 
     if congruent_probe
         if attn_type == 1
-            probe_angle = angles.left - CLAMP_ANGLE;
+            probe_angle = 180;
         else
-            probe_angle = angles.right + CLAMP_ANGLE;
+            probe_angle = 0;
         end
     else
         if attn_type == 1
-            probe_angle = angles.right + CLAMP_ANGLE;
+            probe_angle = 0;
         else
-            probe_angle = angles.left - CLAMP_ANGLE;
+            probe_angle = 180;
         end
     end
     
-    probe_extent = 0.5 * block_level.target.distance; % TODO: it looks like we transform to the right location in StateMachine, but double check?
+    probe_extent = block_level.target.distance; % TODO: it looks like we transform to the right location in StateMachine, but double check?
     % note that probe angle is 2x the clamp angle
-    probe_x = probe_extent * cosd(probe_angle);
-    probe_y = probe_extent * sind(probe_angle);
+    probe_x = probe_extent;
+    probe_y = probe_extent;
 
     trial_level(i).congruent_cursor = congruent_cursor;
     trial_level(i).congruent_probe = congruent_probe;
